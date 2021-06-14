@@ -1,2 +1,3 @@
 # TamilOCR
 Tamil OCR Model using Deep Learning
+OCR (Optical Character Recognition System is a software used to convert handwritten or printed characters into machine editable text. We have been using OCR in our day to day life purposes like Voucher Code Scanning, Document scanning, etc., This particular project aims to develop an OCR system for Tamil handwritten characters using hpl isolated character data-set developed by HP-labs. Here we have tried an ensembled model which is quite convenient if one wants a good amount of accuracy. to 
