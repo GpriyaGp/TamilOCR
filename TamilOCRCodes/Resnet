@@ -1,0 +1,82 @@
+#Unzip the zip file containing the dataset
+!unzip data.zip
+from tensorflow.keras.layers import Dense, Input
+from tensorflow.keras.layers import Conv2D
+from tensorflow.keras import layers, models
+from skimage.io import imread, imshow
+from sklearn.metrics import *
+import tensorflow as tf
+import numpy as np
+import matplotlib.pyplot as plt
+import cv2 
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+from tensorflow.keras.layers import Dense,GlobalAveragePooling2D,Convolution2D,BatchNormalization
+from tensorflow.keras.layers import Flatten,MaxPooling2D,Dropout
+from tensorflow.keras.models import Model
+
+#preprocessing the image
+def pre_processing(image):
+    height = 75
+    width = 75
+    dim = (width, height)
+    original = image
+    
+    # Resize Image
+    res = cv2.resize(image, dim)
+    image = np.array(res)
+    image = cv2.GaussianBlur(image, (5, 5), 0)
+    return image
+
+#Data splitting and loading
+train_datagen = ImageDataGenerator(
+    rescale=1./255,
+    validation_split=0.2,preprocessing_function=pre_processing)
+train_data_dir = r'data'
+width = 75
+height = 75
+batch_size=64
+train_generator = train_datagen.flow_from_directory(
+    train_data_dir,
+    target_size=(width, height),
+    batch_size=batch_size,
+    subset='training') # set as training data
+
+validation_generator = train_datagen.flow_from_directory(
+    train_data_dir, # same directory as training data
+    target_size=(width, height),
+    batch_size=batch_size,
+    subset='validation') # set as validation data
+
+#Defining the Model
+
+ base_model=ResNet152(weights='imagenet',include_top=False, input_shape=(75, 75, 3)) 
+
+x=base_model.output
+
+x= GlobalAveragePooling2D()(x)
+x= BatchNormalization()(x)
+x= Dropout(0.5)(x)
+x= Dense(1024,activation='relu')(x) 
+x= Dense(512,activation='relu')(x) 
+x= BatchNormalization()(x)
+x= Dropout(0.5)(x)
+
+predictions=Dense(156,activation='softmax')(x) #FC-layer
+
+
+#Training
+rs_model = Model(inputs = base_model.input, outputs = predictions)
+rs_optimizer = tf.keras.optimizers.Adam(learning_rate=0.0001)
+rs_model.compile(optimizer=rs_optimizer, loss='categorical_crossentropy', metrics=['acc'])
+
+#Plotting the Accuracy Graph
+plt.plot(history.history['acc'])
+plt.plot(history.history['val_acc'])
+plt.title('model accuracy')
+plt.ylabel('accuracy')
+plt.xlabel('epoch')
+plt.legend(['train', 'val'], loc='upper left')
+plt.show()
+
+#Saving the Model
+rs_model.save('Resnet.h5')

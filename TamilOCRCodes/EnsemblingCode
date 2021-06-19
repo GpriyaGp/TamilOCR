@@ -1,0 +1,105 @@
+from tensorflow.keras import layers, models
+import os
+import pandas as pd
+from tqdm import tqdm
+from sklearn.metrics import *
+import numpy as np
+import cv2 
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+from tensorflow.keras.models import load_model
+from collections import Counter 
+
+#Loading the Models
+resnet = load_model("resnet.h5") 
+densenet = load_model("densenet.h5")
+vggnet = load_model("vggnet.h5")
+
+#unzipping the test data zip file
+!unzip test.zip
+
+#loading the images into a sourceframe
+source_frame = pd.DataFrame(columns=["FilePath", "PageType"])
+path = 'test'
+i = 0 
+for folder in tqdm(os.listdir(path)):
+  for file in os.listdir(os.path.join(path, folder)):
+    source_frame.loc[i] = [os.path.join(path, folder, file), folder]
+    i += 1          
+                     
+#preprocessing function and ensembling 
+def grayscale_conversion(image_array):
+    grayscale = Image.fromarray(np.uint8(image_array)).convert('RGB')
+    return np.array(grayscale)
+
+def pre_processing(image):
+    image = grayscale_conversion(image)
+    image = cv2.GaussianBlur(image, (5, 5), 0)
+    image = image/255
+    return image
+
+def ensemble_predict(img_paths, preprocess=False, voting='hard'):
+  results = []
+  model1Results = []
+  model2Results = []
+  model3Results = []
+  for i in range(0, len(img_paths), 100):
+    images = []
+    for j in range(i, i+100):
+      if j < len(img_paths):
+        img = image.load_img(img_paths[j], target_size=(75, 75))
+        img_array = image.img_to_array(img)
+        if preprocess:
+          img_array = pre_processing(img_array)
+        else:
+          img_array = img_array/255
+        images.append(img_array)
+    np_images = np.array(images)
+    m1_preds = resnet.predict(np_images)
+    m2_preds = densenet.predict(np_images)
+    m3_preds = vggnet.predict(np_images)
+    for k in range(0, len(m1_preds)):
+      m1_pred = m1_preds[k]
+      m2_pred = m2_preds[k]
+      m3_pred = m3_preds[k]
+      m1, m2, m3 = np.argmax(m1_pred), np.argmax(m2_pred), np.argmax(m3_pred)
+      m1p, m2p, m3p = m1_pred[m1], m2_pred[m2], m3_pred[m3]
+      model1Results.append(m1)
+      model2Results.append(m2)
+      model3Results.append(m3)
+      if voting == 'soft':
+        soft_pred = np.add(m1_pred, m2_pred, m3_pred)
+        results.append(np.argmax(soft_pred))
+      else:
+        freqDict = Counter([m1, m2, m3]) 
+        found = 0
+        for (key,val) in freqDict.items(): 
+          if val > 1:
+            found = 1
+            results.append(key) 
+            break
+        if found == 0:
+          results.append([m1, m2, m3][np.argmax([m1p, m2p, m3p])])
+             
+  return (results, model1Results, model2Results, model3Results)
+
+  #defining post processing and predict function
+  def post_process(predictions):
+  final_predictions = []
+  for prediction in predictions:
+    if len(str(prediction)) == 1:
+      prediction = '00' + str(prediction)    
+    elif len(str(prediction)) == 2:
+      prediction = '0' + str(prediction)    
+    prediction = str(prediction)    
+    final_predictions.append(prediction)
+  return final_predictions    
+def predict(img_paths):
+  (predictions, m1, m2, m3) = ensemble_predict(img_paths)
+  final_predictions, m1, m2, m3 = post_process(predictions), post_process(m1), post_process(m2), post_process(m3)
+  return final_predictions, m1, m2, m3
+
+  #calling the predict function
+  (predictions, m1, m2, m3) = predict(source_frame["FilePath"][:].tolist())
+
+  #displaying the accuracy of the model
+  accuracy_score(source_frame['PageType'],predictions)
